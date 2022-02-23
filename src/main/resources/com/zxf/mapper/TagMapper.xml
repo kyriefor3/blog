@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zxf.mapper.TagMapper">
+
+    <select id="findHotTags" parameterType="Integer" resultType="com.zxf.pojo.Tag">
+        select
+            id,avatar,tag_name
+        from
+            ms_tag
+        where
+                id in
+                (
+                    select tag_id
+                    from ms_article_tag
+                    group by tag_id
+                    order by count(*) Desc
+                )
+            limit #{limit}
+    </select>
+
+    <select id="findTagsByArticleId" parameterType="Long" resultType="com.zxf.pojo.Tag">
+        select
+            *
+        from
+            `ms_tag`
+        where
+                id in(
+                select
+                    `tag_id`
+                from
+                    `ms_article_tag`
+                where article_id = #{articleId}
+            );
+    </select>
+</mapper>

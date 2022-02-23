@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--MyBatis配置文件-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zxf.mapper.CategoryMapper">
+
+
+    <select id="findCategoryByArticleId" parameterType="Long" resultType="com.zxf.pojo.Category">
+        select
+            id,avatar,category_name,description
+        from
+            `ms_category`
+        where
+                id =
+                (
+                select category_id
+                from `ms_article`
+                where id = #{articleId}
+                )
+    </select>
+</mapper>
