@@ -264,7 +264,7 @@ public class RegisterServiceImpl implements RegisterService {
         // 生成token，并存在redis中
         String token = JWTUtils.createToken(authorNew.getId());
         redisTemplate.opsForValue()
-                .set("TOKEN_"+token, JSON.toJSONString(authorNew),100, TimeUnit.DAYS);
+                .set("TOKEN_"+token, JSON.toJSONString(authorNew),100, TimeUnit.DAYS);//设置过期时间100天
         return Result.success(token);
     }
 }
@@ -501,6 +501,70 @@ public class AuthorController {
 
 存在，则根据id生成token返回客户端，并将token存储在redis中。
 
+（1）controller
+
+~~~java
+@RestController
+@RequestMapping("login")
+public class LoginController {
+
+    @Autowired
+    private LoginService loginService;
+
+    @PostMapping
+    public Result login(@RequestBody LoginParams loginParams){
+        Result result = loginService.login(loginParams);
+        return result;
+    }
+
+}
+~~~
+
+（2）service
+
+~~~java
+//===================
+//		service
+//===================
+public interface LoginService {
+    Result login(LoginParams loginParams);
+}
+
+//===================
+//		serviceimpl
+//===================
+@Service
+public class LoginServiceImpl implements LoginService {
+
+    @Autowired
+    private AuthorService authorService;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    @Override
+    public Result login(LoginParams loginParams) {
+        String account = loginParams.getAccount();
+        String password = loginParams.getPassword();
+        String salt = "zxf2kyrie!@#zzz";//加密盐
+        String password_actual = DigestUtils.md5Hex(password + salt);
+
+        Author author = authorService.findAuthor(account,password_actual);
+
+        //用户不存在，返回错误信息
+        if (author==null){
+            return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.getCode(), ErrorCode.ACCOUNT_PWD_NOT_EXIST.getMsg());
+        }
+
+        //用户存在，根据id生成token，返回客户端，并保存在redis中
+        String token = JWTUtils.createToken(author.getId());
+        redisTemplate.opsForValue()
+                .set("TOKEN_"+token, JSON.toJSONString(author),100, TimeUnit.DAYS);
+        return Result.success(token);
+    }
+}
+~~~
+
 
 
 ##### 1.登录拦截器
@@ -511,9 +575,7 @@ public class AuthorController {
 
 客户端发起对这些资源的访问请求，必须携带token。服务端在接收到这些请求之后，都需要进行token的验证，验证成功之后才能去访问相应的资源。
 
-实现：
-
-拦截器。
+实现：拦截器。
 
 开发步骤：
 
@@ -772,52 +834,28 @@ public class LogoutController {
 //===================
 //		service
 //===================
-package com.zxf.service;
+public interface LogoutService {
 
-public interface LoginService {
-    Result login(LoginParams loginParams);
+    Result logout(String authorization);
 }
 
-
-//==========================
+//===================
 //		serviceimpl
-//==========================
-package com.zxf.service.impl;
-
+//===================
 @Service
-public class LoginServiceImpl implements LoginService {
+public class LogoutServiceImpl implements LogoutService {
 
     @Autowired
-    private AuthorService authorService;
-
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+    private RedisTemplate<String,String> redisTemplate;
 
     @Override
-    public Result login(LoginParams loginParams) {
-        String account = loginParams.getAccount();
-        String password = loginParams.getPassword();
-        String salt = "zxf2kyrie!@#zzz";//加密盐
-        String password_actual = DigestUtils.md5Hex(password + salt);
-
-        Author author = authorService.findAuthor(account,password_actual);
-
-        //用户不存在，返回错误信息
-        if (author==null){
-            return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.getCode(), ErrorCode.ACCOUNT_PWD_NOT_EXIST.getMsg());
-        }
-
-        //用户存在，根据id生成token，返回客户端，并保存在redis中
-        String token = JWTUtils.createToken(author.getId());
-        redisTemplate.opsForValue()
-                .set("TOKEN_"+token, JSON.toJSONString(author),100, TimeUnit.DAYS);
-        return Result.success(token);
+    public Result logout(String authorization) {
+        System.out.println(redisTemplate.delete(authorization));
+        return (redisTemplate.delete("TOKEN_" + authorization))?
+                Result.success(null):Result.fail(ErrorCode.LOGOUT_FAIL.getCode(),ErrorCode.LOGOUT_FAIL.getMsg());
     }
 }
-
 ~~~
-
-
 
 
 
@@ -1690,6 +1728,19 @@ public class LogAspect {
 
 }
 
+
+//==============
+//	注解方式AOP	
+//==============
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface LogAnnotation {
+
+    String module() default "";
+
+    String operation() default "";
+}
 ~~~
 
 几个工具类
